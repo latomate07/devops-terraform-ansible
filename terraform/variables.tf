@@ -1,5 +1,5 @@
 variable "image" {
-  description = "Docker image to run"
+  description = "Docker image to deploy"
   type        = string
   default     = "nginx:alpine"
 }
@@ -14,4 +14,10 @@ variable "external_port" {
   description = "Port exposed on the host machine"
   type        = number
   default     = 8080
+}
+
+variable "environment" {
+  description = "Deployment environment"
+  type        = string
+  default     = "dev"
 }
