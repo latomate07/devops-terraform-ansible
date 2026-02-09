@@ -1,0 +1,62 @@
+- name: Validation HTTP + hygiene minimale (read-only)
+  hosts: local
+  gather_facts: false
+
+  vars:
+    container_name: "nginx_app"
+    external_port: 8080
+    url: "http://localhost:{{ external_port }}"
+
+  tasks:
+    # 10) Vérifier que le service HTTP répond
+    - name: HTTP check (uri)
+      uri:
+        url: "{{ url }}"
+        method: GET
+        return_content: false
+        status_code: [200, 301, 302, 401, 403]
+      register: http_result
+
+    - name: Show HTTP status
+      debug:
+        msg: "HTTP status={{ http_result.status }} url={{ url }}"
+
+    # 11) Vérifier l’état du container (running)
+    - name: Check container is running (read-only)
+      command: docker inspect -f '{{"{{"}}.State.Running{{"}}"}}' {{ container_name }}
+      register: running_out
+      changed_when: false
+
+    - name: Fail if container is not running
+      fail:
+        msg: "Container {{ container_name }} is NOT running."
+      when: running_out.stdout.strip() != "true"
+
+    # 12) Vérifier l’exposition du port attendu
+    - name: Check published ports (read-only)
+      command: docker port {{ container_name }}
+      register: port_out
+      changed_when: false
+
+    - name: Fail if expected external port is not published
+      fail:
+        msg: "Expected port {{ external_port }} not found. docker port output: {{ port_out.stdout }}"
+      when: (port_out.stdout is not search(":" ~ (external_port|string)))
+
+    # 13) Vérifier la restart policy
+    - name: Check restart policy (read-only)
+      command: docker inspect -f '{{"{{"}}.HostConfig.RestartPolicy.Name{{"}}"}}' {{ container_name }}
+      register: restart_out
+      changed_when: false
+
+    - name: Fail if restart policy is not correct
+      fail:
+        msg: "Restart policy is '{{ restart_out.stdout.strip() }}' (expected always or unless-stopped)."
+      when: restart_out.stdout.strip() not in ["always", "unless-stopped"]
+
+    - name: Summary
+      debug:
+        msg:
+          - "OK: container={{ container_name }} running"
+          - "OK: port={{ external_port }} published"
+          - "OK: restart_policy={{ restart_out.stdout.strip() }}"
